@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMA2 LEGION HUB // 12D DODECA-CROWN HUD</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #060911; color: #d8f3ff; font-family: monospace; display: flex; flex-direction: column; align-items: center; padding: 14px; }
+  header, canvas, .grid, .vitals-bar, .log-box { width: 100%; max-width: 720px; margin-bottom: 12px; }
+  header, .card, .vitals-bar, .log-box { background: rgba(12, 22, 38, 0.88); border: 1px solid #1e3a5f; border-radius: 8px; padding: 10px 14px; }
+  header { display: flex; justify-content: space-between; align-items: center; }
+  .title { font-size: 14px; font-weight: bold; color: #5ce1e6; }
+  .sub { font-size: 11px; color: #8aa4c8; margin-top: 2px; }
+  .badge { padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #0f3d2e; color: #39ff9c; border: 1px solid #39ff9c; }
+  .badge.warn { background: #3d2a0f; color: #ffbe39; border-color: #ffbe39; }
+  canvas { height: 280px; background: radial-gradient(circle, #0e1c33 0%, #060911 75%); border: 1px solid #1e3a5f; border-radius: 8px; }
+  .vitals-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+  .v-val { font-size: 14px; font-weight: bold; color: #5ce1e6; margin-top: 2px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .big { font-size: 22px; font-weight: bold; color: #39ff9c; margin: 4px 0; }
+  .tier-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; border-bottom: 1px dashed #152842; }
+  .dispatch-form { display: flex; gap: 6px; margin-bottom: 8px; }
+  input { flex: 1; background: #081120; border: 1px solid #2b5282; color: #e2f5ff; padding: 6px 8px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+  button { background: #144d63; color: #5ce1e6; border: 1px solid #5ce1e6; padding: 6px 12px; border-radius: 4px; font-family: monospace; font-weight: bold; cursor: pointer; }
+  .log-item { font-size: 11px; padding: 4px 0; border-bottom: 1px solid #132238; color: #b8d0eb; }
+</style>
+</head>
+<body>
+  <header>
+    <div><div class="title">OMA2 LEGION HUB // 12D DODECA-CROWN</div><div class="sub">MERIDIAN-EAST &bull; GUARDIAN: VESPERA-9</div></div>
+    <div id="badge" class="badge">SYNCING</div>
+  </header>
+  <canvas id="c" width="720" height="280"></canvas>
+  <div class="vitals-bar">
+    <div><div class="sub">RAM LOAD</div><div id="v-ram" class="v-val">--%</div></div>
+    <div><div class="sub">CPU (1M)</div><div id="v-cpu" class="v-val">--</div></div>
+    <div><div class="sub">STORAGE</div><div id="v-disk" class="v-val">--%</div></div>
+    <div><div class="sub">NET PING</div><div id="v-ping" class="v-val">--ms</div></div>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="sub">MASTER COHERENCE</div><div id="coh" class="big">--.-%</div><div id="meta" class="sub">Drift: --s</div></div>
+    <div class="card"><div class="sub">3D–12D TORUS LATTICE</div><div id="tiers"></div></div>
+  </div>
+  <div class="log-box">
+    <div class="title" style="margin-bottom:6px">OUTPOST CHRONICLE &amp; DISPATCH CONSOLE</div>
+    <form class="dispatch-form" onsubmit="sendDispatch(event)">
+      <input id="note" type="text" placeholder="Log Meridian-East dispatch..." required />
+      <button type="submit">LOG</button>
+    </form>
+    <div id="logs">Loading...</div>
+  </div>
+<script>
+const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+let data = { coherence_pct: 93, state: 'HARMONIC_LOCK', drift_sec: 0, torus_std: 0.05, vitals: {ram_pct: 0, load_1m: 0, disk_pct: 0, ping_ms: 0}, tiers: [], logs: [] }, angle = 0;
+
+async function sendDispatch(e) {
+  e.preventDefault();
+  const inp = document.getElementById('note'), note = inp.value.trim();
+  if (!note) return;
+  inp.value = '';
+  await fetch('/api/dispatch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({note}) });
+  poll();
+}
+
+async function poll() {
+  try {
+    data = await (await fetch('/api/telemetry')).json();
+    document.getElementById('coh').textContent = data.coherence_pct.toFixed(2) + '%';
+    document.getElementById('meta').textContent = `Drift: ${data.drift_sec}s | σ: ${data.torus_std.toFixed(4)}`;
+    if (data.vitals) {
+      document.getElementById('v-ram').textContent = data.vitals.ram_pct + '%';
+      document.getElementById('v-cpu').textContent = data.vitals.load_1m;
+      document.getElementById('v-disk').textContent = data.vitals.disk_pct + '%';
+      document.getElementById('v-ping').textContent = data.vitals.ping_ms >= 0 ? data.vitals.ping_ms + 'ms' : 'OFFLINE';
+    }
+    const b = document.getElementById('badge');
+    b.textContent = data.state; b.className = data.state === 'HARMONIC_LOCK' ? 'badge' : 'badge warn';
+    document.getElementById('tiers').innerHTML = data.tiers.map(t => `<div class="tier-row"><span>${t.tier}</span><span>${t.torus >= 0 ? '+' : ''}${t.torus.toFixed(4)}</span></div>`).join('');
+    document.getElementById('logs').innerHTML = data.logs.map(l => `<div class="log-item"><b>[${l.local_time}]</b> ${l.status} — ${l.dispatch_note}</div>`).join('');
+  } catch (e) {}
+}
+
+function draw() {
+  ctx.clearRect(0, 0, 720, 280);
+  const cx = 360, cy = 140, list = data.tiers.length ? data.tiers : Array.from({length: 10}, (_, i) => ({torus: 0}));
+  list.forEach((t, i) => {
+    const sides = i + 3, r = (116 - i * 9.2) * (1 + t.torus * 0.35), rot = angle * (i % 2 ? -1 : 1) * (0.4 + i * 0.08);
+    ctx.beginPath();
+    for (let s = 0; s <= sides; s++) {
+      const a = rot + (s * 2 * Math.PI / sides), x = cx + r * Math.cos(a), y = cy + r * Math.sin(a) * 0.82;
+      s ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.strokeStyle = `hsla(${140 + i * 18}, 90%, 62%, ${0.35 + i * 0.055})`;
+    ctx.lineWidth = i === 9 ? 2.2 : 1.2; ctx.stroke();
+    if (i === 9) for (let s = 0; s < sides; s++) {
+      const a = rot + (s * 2 * Math.PI / sides);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a) * 0.82);
+      ctx.strokeStyle = 'rgba(255, 205, 86, 0.55)'; ctx.stroke();
+    }
+  });
+  ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fillStyle = '#ffcf56'; ctx.fill();
+  angle += 0.012; requestAnimationFrame(draw);
+}
+poll(); setInterval(poll, 2000); draw();
+</script>
+</body>
+</html>
